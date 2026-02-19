@@ -1,0 +1,226 @@
+import { Response, NextFunction } from 'express';
+import { AuthenticatedRequest } from '../middleware/auth';
+import { supabaseAdmin } from '../config/supabase';
+import { executeCode } from '../services/judge0Service';
+import { generateHint } from '../services/aiHintService';
+import { awardXP, checkAndUnlockAchievements } from '../services/xpService';
+import { SubmissionRequest, SubmissionResponse, JUDGE0_STATUS } from '../types';
+
+export const submitCode = async (
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> => {
+  try {
+    const userId = req.user!.id;
+    const { checkpoint_id, code } = req.body as SubmissionRequest;
+
+    if (!checkpoint_id || !code) {
+      res.status(400).json({ error: 'checkpoint_id and code are required.' });
+      return;
+    }
+
+    // 1. Fetch checkpoint
+    const { data: checkpoint, error: checkpointErr } = await supabaseAdmin
+      .from('checkpoints')
+      .select('*')
+      .eq('id', checkpoint_id)
+      .eq('is_active', true)
+      .single();
+
+    if (checkpointErr || !checkpoint) {
+      res.status(404).json({
+        error: 'Checkpoint not found',
+        message: 'This restoration site does not exist in the Grid.',
+      });
+      return;
+    }
+
+    // 2. Get or create user_progress
+    let { data: progress } = await supabaseAdmin
+      .from('user_progress')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('checkpoint_id', checkpoint_id)
+      .single();
+
+    if (!progress) {
+      const { data: newProgress } = await supabaseAdmin
+        .from('user_progress')
+        .insert({
+          user_id: userId,
+          checkpoint_id,
+          status: 'unlocked',
+          attempt_count: 0,
+        })
+        .select()
+        .single();
+      progress = newProgress;
+    }
+
+    // Block re-submission on already-completed checkpoints
+    if (progress?.status === 'completed') {
+      res.status(400).json({
+        error: 'Already completed',
+        message: 'This restoration is already sealed. Your work here is done, Initiate.',
+      });
+      return;
+    }
+
+    // 3. Increment attempt count
+    const newAttemptCount = (progress?.attempt_count ?? 0) + 1;
+    await supabaseAdmin
+      .from('user_progress')
+      .update({ attempt_count: newAttemptCount, updated_at: new Date().toISOString() })
+      .eq('user_id', userId)
+      .eq('checkpoint_id', checkpoint_id);
+
+    // 4. Execute code via Judge0
+    const executionResult = await executeCode(code, checkpoint.test_input ?? undefined);
+
+    // 5. Check for execution errors
+    if (executionResult.error_type === 'timeout') {
+      const hint = await generateHint({
+        checkpoint_id,
+        code,
+        error_output: 'Time Limit Exceeded — infinite loop detected',
+        attempt_count: newAttemptCount,
+      });
+
+      const response: SubmissionResponse = {
+        success: false,
+        narrative_response: `The spell-construct has fallen into an infinite loop — a fragment of The Corruption itself. Time froze around your rune. ${checkpoint.narrative_failure}`,
+        updated_xp: await getCurrentXP(userId),
+        updated_progress: await getProgress(userId, checkpoint_id),
+        sfx_trigger: 'error',
+        hint: hint.hint,
+        error_type: 'timeout',
+      };
+      res.json(response);
+      return;
+    }
+
+    if (executionResult.error_type === 'syntax') {
+      const errorMsg = executionResult.compile_output || executionResult.stderr;
+      const hint = await generateHint({
+        checkpoint_id,
+        code,
+        error_output: errorMsg,
+        attempt_count: newAttemptCount,
+      });
+
+      const response: SubmissionResponse = {
+        success: false,
+        narrative_response: `A rune fracture detected! Your spell-construct has a structural flaw. The Corruption exploits broken syntax. ${checkpoint.narrative_failure}`,
+        updated_xp: await getCurrentXP(userId),
+        updated_progress: await getProgress(userId, checkpoint_id),
+        sfx_trigger: 'error',
+        hint: hint.hint,
+        error_type: 'syntax',
+      };
+      res.json(response);
+      return;
+    }
+
+    if (executionResult.error_type === 'runtime') {
+      const errorMsg = executionResult.stderr;
+      const hint = await generateHint({
+        checkpoint_id,
+        code,
+        error_output: errorMsg,
+        attempt_count: newAttemptCount,
+      });
+
+      const response: SubmissionResponse = {
+        success: false,
+        narrative_response: `The construct shattered mid-cast! A runtime fracture tore through your logic. The beast remains. ${checkpoint.narrative_failure}`,
+        updated_xp: await getCurrentXP(userId),
+        updated_progress: await getProgress(userId, checkpoint_id),
+        sfx_trigger: 'error',
+        hint: hint.hint,
+        error_type: 'runtime',
+      };
+      res.json(response);
+      return;
+    }
+
+    // 6. Compare output
+    const actualOutput = (executionResult.stdout ?? '').trim();
+    const expectedOutput = checkpoint.expected_output.trim();
+    const isCorrect = actualOutput === expectedOutput;
+
+    if (isCorrect) {
+      // 7. Award XP
+      const { new_xp, leveled_up } = await awardXP(userId, checkpoint.xp_reward);
+
+      // 8. Mark progress complete
+      await supabaseAdmin
+        .from('user_progress')
+        .update({
+          status: 'completed',
+          completed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('user_id', userId)
+        .eq('checkpoint_id', checkpoint_id);
+
+      // 9. Check achievements
+      const achievement = await checkAndUnlockAchievements(userId, checkpoint_id, newAttemptCount);
+
+      const narrative = leveled_up
+        ? `${checkpoint.narrative_success} The Grid resonates with your power — you have ascended to a new level!`
+        : checkpoint.narrative_success;
+
+      const response: SubmissionResponse = {
+        success: true,
+        narrative_response: narrative,
+        updated_xp: new_xp,
+        updated_progress: await getProgress(userId, checkpoint_id),
+        sfx_trigger: 'success',
+        achievement: achievement ?? undefined,
+      };
+      res.json(response);
+    } else {
+      // Wrong answer
+      const hint = await generateHint({
+        checkpoint_id,
+        code,
+        error_output: `Expected: "${expectedOutput}" but got: "${actualOutput}"`,
+        attempt_count: newAttemptCount,
+      });
+
+      const response: SubmissionResponse = {
+        success: false,
+        narrative_response: checkpoint.narrative_failure,
+        updated_xp: await getCurrentXP(userId),
+        updated_progress: await getProgress(userId, checkpoint_id),
+        sfx_trigger: 'failure',
+        hint: hint.hint,
+        error_type: 'wrong_output',
+      };
+      res.json(response);
+    }
+  } catch (err) {
+    next(err);
+  }
+};
+
+// Helpers
+const getCurrentXP = async (userId: string): Promise<number> => {
+  const { data } = await supabaseAdmin
+    .from('profiles')
+    .select('xp')
+    .eq('user_id', userId)
+    .single();
+  return data?.xp ?? 0;
+};
+
+const getProgress = async (userId: string, checkpointId: string) => {
+  const { data } = await supabaseAdmin
+    .from('user_progress')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('checkpoint_id', checkpointId)
+    .single();
+  return data;
+};
