@@ -1,0 +1,82 @@
+.auth-screen {
+  width: 100%;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(ellipse at center, #1a1028 0%, #0a0a0f 70%);
+  padding: 20px;
+}
+
+.auth-container {
+  width: 100%;
+  max-width: 460px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.auth-header {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.auth-icon {
+  font-size: 48px;
+  line-height: 1;
+}
+
+.auth-title {
+  font-size: 16px;
+}
+
+.auth-subtitle {
+  font-size: 18px;
+  color: var(--text-dim);
+}
+
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.auth-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.auth-label {
+  font-size: 9px;
+  letter-spacing: 2px;
+}
+
+.auth-error,
+.auth-message {
+  padding: 12px 14px;
+}
+
+.auth-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.auth-toggle {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding-top: 8px;
+  border-top: 2px solid var(--pixel-border);
+}
+
+.auth-back {
+  font-size: 9px;
+  padding: 8px 16px;
+  align-self: center;
+}

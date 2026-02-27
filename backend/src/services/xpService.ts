@@ -1,6 +1,19 @@
 import { supabaseAdmin } from '../config/supabase';
+import { Achievement } from '../types';
 
 const LEVEL_THRESHOLDS = [0, 100, 250, 500, 900, 1400, 2100, 3000];
+
+// Map checkpoint order_index → achievement key awarded on completion
+const CHECKPOINT_ACHIEVEMENT_MAP: Record<number, string> = {
+  1: 'restored_greeting',
+  2: 'restored_loop',
+  3: 'restored_string',
+  4: 'restored_list',
+  5: 'restored_dict',
+  6: 'restored_recursion',
+  7: 'restored_palindrome',
+  8: 'dragon_sigil',
+};
 
 export const getLevelFromXP = (xp: number): number => {
   for (let i = LEVEL_THRESHOLDS.length - 1; i >= 0; i--) {
@@ -36,68 +49,123 @@ export const awardXP = async (
     throw new Error(`Failed to update XP: ${updateError.message}`);
   }
 
-  return {
-    new_xp,
-    new_level,
-    leveled_up: new_level > old_level,
-  };
+  return { new_xp, new_level, leveled_up: new_level > old_level };
+};
+
+// Unlock the next checkpoint after completing the current one
+export const unlockNextCheckpoint = async (
+  userId: string,
+  completedOrderIndex: number
+): Promise<void> => {
+  const nextOrderIndex = completedOrderIndex + 1;
+
+  const { data: nextCheckpoint } = await supabaseAdmin
+    .from('checkpoints')
+    .select('id')
+    .eq('order_index', nextOrderIndex)
+    .single();
+
+  if (!nextCheckpoint) return;
+
+  await supabaseAdmin
+    .from('user_progress')
+    .upsert(
+      {
+        user_id: userId,
+        checkpoint_id: nextCheckpoint.id,
+        status: 'unlocked',
+        attempt_count: 0,
+      },
+      { onConflict: 'user_id,checkpoint_id' }
+    );
+};
+
+// Grant an achievement if the user does not already have it
+const grantAchievement = async (
+  userId: string,
+  achievementKey: string
+): Promise<Achievement | null> => {
+  const { data: achievement } = await supabaseAdmin
+    .from('achievements')
+    .select('*')
+    .eq('key', achievementKey)
+    .single();
+
+  if (!achievement) return null;
+
+  const { data: existing } = await supabaseAdmin
+    .from('user_achievements')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('achievement_id', achievement.id)
+    .maybeSingle();
+
+  if (existing) return null;
+
+  await supabaseAdmin.from('user_achievements').insert({
+    user_id: userId,
+    achievement_id: achievement.id,
+    unlocked_at: new Date().toISOString(),
+  });
+
+  return achievement;
 };
 
 export const checkAndUnlockAchievements = async (
   userId: string,
   checkpointId: string,
   attemptCount: number
-): Promise<import('../types').Achievement | null> => {
-  // Check for "First Blood" achievement — complete first checkpoint
-  const { data: existing } = await supabaseAdmin
-    .from('user_achievements')
-    .select('id')
-    .eq('user_id', userId)
-    .limit(1);
+): Promise<Achievement | null> => {
+  const { data: checkpoint } = await supabaseAdmin
+    .from('checkpoints')
+    .select('order_index')
+    .eq('id', checkpointId)
+    .single();
 
-  if (existing && existing.length === 0) {
-    // First achievement ever — unlock "Spark of the Grid"
-    const { data: achievement } = await supabaseAdmin
-      .from('achievements')
-      .select('*')
-      .eq('key', 'spark_of_the_grid')
-      .single();
+  const orderIndex = checkpoint?.order_index ?? 0;
 
-    if (achievement) {
-      await supabaseAdmin.from('user_achievements').insert({
-        user_id: userId,
-        achievement_id: achievement.id,
-        unlocked_at: new Date().toISOString(),
-      });
-      return achievement;
-    }
+  // 1. Per-checkpoint completion achievement
+  const checkpointAchKey = CHECKPOINT_ACHIEVEMENT_MAP[orderIndex];
+  if (checkpointAchKey) {
+    const ach = await grantAchievement(userId, checkpointAchKey);
+    if (ach) return ach;
   }
 
-  // Check for "Flawless Initiate" — first try success
+  // 2. Spark of the Grid — very first completion
+  const { data: allUserAch } = await supabaseAdmin
+    .from('user_achievements')
+    .select('id')
+    .eq('user_id', userId);
+
+  if (allUserAch && allUserAch.length === 1) {
+    const ach = await grantAchievement(userId, 'spark_of_the_grid');
+    if (ach) return ach;
+  }
+
+  // 3. Flawless Initiate — first attempt success
   if (attemptCount === 1) {
-    const { data: flawlessAch } = await supabaseAdmin
-      .from('achievements')
-      .select('*')
-      .eq('key', 'flawless_initiate')
-      .single();
+    const ach = await grantAchievement(userId, 'flawless_initiate');
+    if (ach) return ach;
+  }
 
-    if (flawlessAch) {
-      const { data: alreadyHas } = await supabaseAdmin
-        .from('user_achievements')
-        .select('id')
-        .eq('user_id', userId)
-        .eq('achievement_id', flawlessAch.id)
-        .single();
+  // 4. Halfway There — 4 hunts completed
+  const { data: completedProgress } = await supabaseAdmin
+    .from('user_progress')
+    .select('id')
+    .eq('user_id', userId)
+    .eq('status', 'completed');
 
-      if (!alreadyHas) {
-        await supabaseAdmin.from('user_achievements').insert({
-          user_id: userId,
-          achievement_id: flawlessAch.id,
-          unlocked_at: new Date().toISOString(),
-        });
-        return flawlessAch;
-      }
-    }
+  const completedCount = completedProgress?.length ?? 0;
+
+  if (completedCount === 4) {
+    const ach = await grantAchievement(userId, 'halfway_there');
+    if (ach) return ach;
+  }
+
+  // 5. Full Restoration — all 8 completed
+  if (completedCount === 8) {
+    const ach = await grantAchievement(userId, 'full_restoration');
+    if (ach) return ach;
   }
 
   return null;

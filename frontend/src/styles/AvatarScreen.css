@@ -1,0 +1,110 @@
+.avatar-screen {
+  width: 100%;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(ellipse at 30% 70%, #1a1028 0%, #0a0a0f 70%);
+  padding: 20px;
+}
+
+.avatar-container {
+  width: 100%;
+  max-width: 680px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.avatar-header {
+  text-align: center;
+  padding: 20px;
+}
+
+.avatar-title {
+  font-size: 18px;
+  margin-bottom: 10px;
+}
+
+.avatar-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+@media (max-width: 560px) {
+  .avatar-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.avatar-option {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 16px 10px;
+  cursor: pointer;
+  background-color: var(--pixel-panel);
+  border: 4px solid var(--pixel-border);
+  transition: border-color 80ms, box-shadow 80ms;
+}
+
+.avatar-option:hover {
+  border-color: var(--ember-gold-dark);
+  background-color: var(--pixel-panel-light);
+}
+
+.avatar-option--selected {
+  border-color: var(--ember-gold);
+  box-shadow: 0 0 0 2px var(--ember-gold-dark), 0 0 20px rgba(240, 192, 64, 0.4);
+  background-color: #2a2215;
+}
+
+.avatar-emoji {
+  font-size: 40px;
+  line-height: 1;
+}
+
+.avatar-label {
+  font-size: 10px;
+  font-family: var(--font-pixel);
+  color: var(--text-bright);
+}
+
+.avatar-desc {
+  font-size: 14px;
+  text-align: center;
+}
+
+.avatar-selected-badge {
+  font-size: 9px;
+  margin-top: 4px;
+  animation: blink 1s step-end infinite;
+}
+
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.avatar-username {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.avatar-lore {
+  animation: fade-in-pixel 0.3s steps(3) forwards;
+}
+
+@keyframes fade-in-pixel {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.avatar-confirm-btn {
+  width: 100%;
+  font-size: 12px;
+  padding: 16px;
+}

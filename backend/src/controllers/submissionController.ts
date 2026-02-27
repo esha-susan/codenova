@@ -3,10 +3,10 @@ import { AuthenticatedRequest } from '../middleware/auth';
 import { supabaseAdmin } from '../config/supabase';
 import { executeCode } from '../services/localPythonService';
 import { generateHint } from '../services/aiHintService';
-import { awardXP, checkAndUnlockAchievements } from '../services/xpService';
+import { awardXP, checkAndUnlockAchievements, unlockNextCheckpoint } from '../services/xpService';
 import { SubmissionRequest, SubmissionResponse } from '../types';
 
-// Safe wrapper — hint failure never crashes the submission
+// Safe wrapper — hint failure NEVER crashes the submission
 const safeGenerateHint = async (
   ...args: Parameters<typeof generateHint>
 ): Promise<string> => {
@@ -71,14 +71,8 @@ export const submitCode = async (
       progress = newProgress;
     }
 
-    // Block re-submission on already-completed checkpoints
-    if (progress?.status === 'completed') {
-      res.status(400).json({
-        error: 'Already completed',
-        message: 'This restoration is already sealed. Your work here is done, Initiate.',
-      });
-      return;
-    }
+    // Track whether this level was already completed before this submission
+    const alreadyCompleted = progress?.status === 'completed';
 
     // 3. Increment attempt count
     const newAttemptCount = (progress?.attempt_count ?? 0) + 1;
@@ -88,10 +82,10 @@ export const submitCode = async (
       .eq('user_id', userId)
       .eq('checkpoint_id', checkpoint_id);
 
-    // 4. Execute code via Piston
+    // 4. Execute code locally
     const executionResult = await executeCode(code, checkpoint.test_input ?? undefined);
 
-    // 5. Check for execution errors
+    // 5. Handle execution errors
     if (executionResult.error_type === 'timeout') {
       const hint = await safeGenerateHint({
         checkpoint_id,
@@ -99,7 +93,6 @@ export const submitCode = async (
         error_output: 'Time Limit Exceeded — infinite loop detected',
         attempt_count: newAttemptCount,
       });
-
       const response: SubmissionResponse = {
         success: false,
         narrative_response: `The spell-construct has fallen into an infinite loop — a fragment of The Corruption itself. Time froze around your rune. ${checkpoint.narrative_failure}`,
@@ -121,7 +114,6 @@ export const submitCode = async (
         error_output: errorMsg,
         attempt_count: newAttemptCount,
       });
-
       const response: SubmissionResponse = {
         success: false,
         narrative_response: `A rune fracture detected! Your spell-construct has a structural flaw. The Corruption exploits broken syntax. ${checkpoint.narrative_failure}`,
@@ -143,7 +135,6 @@ export const submitCode = async (
         error_output: errorMsg,
         attempt_count: newAttemptCount,
       });
-
       const response: SubmissionResponse = {
         success: false,
         narrative_response: `The construct shattered mid-cast! A runtime fracture tore through your logic. The beast remains. ${checkpoint.narrative_failure}`,
@@ -162,25 +153,50 @@ export const submitCode = async (
     const expectedOutput = checkpoint.expected_output.trim();
     const isCorrect = actualOutput === expectedOutput;
 
+    console.log('[Submission] Output comparison:', {
+      actual: JSON.stringify(actualOutput),
+      expected: JSON.stringify(expectedOutput),
+      isCorrect,
+      alreadyCompleted,
+    });
+
     if (isCorrect) {
-      // 7. Award XP
-      const { new_xp, leveled_up } = await awardXP(userId, checkpoint.xp_reward);
+      let new_xp = await getCurrentXP(userId);
+      let leveled_up = false;
+      let achievement = null;
 
-      // 8. Mark progress complete
-      await supabaseAdmin
-        .from('user_progress')
-        .update({
-          status: 'completed',
-          completed_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq('user_id', userId)
-        .eq('checkpoint_id', checkpoint_id);
+      // Only award XP, unlock next level, and grant achievements
+      // the FIRST time the level is cracked
+      if (!alreadyCompleted) {
+        const xpResult = await awardXP(userId, checkpoint.xp_reward);
+        new_xp = xpResult.new_xp;
+        leveled_up = xpResult.leveled_up;
 
-      // 9. Check achievements
-      const achievement = await checkAndUnlockAchievements(userId, checkpoint_id, newAttemptCount);
+        // Mark progress complete
+        await supabaseAdmin
+          .from('user_progress')
+          .update({
+            status: 'completed',
+            completed_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq('user_id', userId)
+          .eq('checkpoint_id', checkpoint_id);
 
-      const narrative = leveled_up
+        // Unlock next checkpoint
+        await unlockNextCheckpoint(userId, checkpoint.order_index);
+
+        // Check achievements
+        achievement = await checkAndUnlockAchievements(
+          userId,
+          checkpoint_id,
+          newAttemptCount
+        );
+      }
+
+      const narrative = alreadyCompleted
+        ? `Well done, Initiate! Your rune still holds true. This restoration was already sealed — no new XP is awarded for repeat solutions, but your mastery is noted by the Grid.`
+        : leveled_up
         ? `${checkpoint.narrative_success} The Grid resonates with your power — you have ascended to a new level!`
         : checkpoint.narrative_success;
 
@@ -194,14 +210,13 @@ export const submitCode = async (
       };
       res.json(response);
     } else {
-      // Wrong answer
+      // Wrong answer — always provide hint regardless of completion status
       const hint = await safeGenerateHint({
         checkpoint_id,
         code,
         error_output: `Expected: "${expectedOutput}" but got: "${actualOutput}"`,
         attempt_count: newAttemptCount,
       });
-
       const response: SubmissionResponse = {
         success: false,
         narrative_response: checkpoint.narrative_failure,

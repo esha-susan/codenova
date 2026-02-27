@@ -1,0 +1,147 @@
+.game-screen {
+  width: 100%;
+  min-height: 100vh;
+  background: var(--pixel-black);
+  display: flex;
+  flex-direction: column;
+}
+
+/* HUD */
+.game-hud {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 16px;
+  border-left: none;
+  border-right: none;
+  border-top: none;
+  background-color: var(--pixel-darker);
+  flex-shrink: 0;
+}
+
+.game-back-btn {
+  font-size: 8px;
+  padding: 6px 12px;
+  flex-shrink: 0;
+}
+
+.game-hud-info {
+  flex: 1;
+}
+
+.game-hud-xp {
+  width: 200px;
+  flex-shrink: 0;
+}
+
+/* Main layout */
+.game-main {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  flex: 1;
+}
+
+@media (max-width: 900px) {
+  .game-main {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Left panel */
+.game-left-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border-right: 3px solid var(--pixel-border);
+  overflow-y: auto;
+}
+
+.game-dialogue {
+  flex-shrink: 0;
+  border-left: none;
+  border-right: none;
+  border-radius: 0;
+  min-height: 100px;
+}
+
+.dialogue--success {
+  border-top-color: var(--dragon-green);
+  background-color: #0f1a0f;
+}
+
+.dialogue--failure {
+  border-top-color: var(--corruption-red);
+  background-color: #1a0a0a;
+}
+
+.hint-popup {
+  margin: 0;
+  border-left: none;
+  border-right: none;
+  border-radius: 0;
+  flex-shrink: 0;
+}
+
+/* Right panel */
+.game-right-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  overflow-y: auto;
+}
+
+.game-challenge {
+  border-left: none;
+  border-right: none;
+  border-top: none;
+  border-radius: 0;
+  border-bottom-color: var(--pixel-border);
+  flex-shrink: 0;
+}
+
+.game-editor-header {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background-color: var(--pixel-darker);
+  border-bottom: 2px solid var(--pixel-border);
+  flex-shrink: 0;
+}
+
+.game-editor {
+  border-left: none;
+  border-right: none;
+  border-top: none;
+  border-radius: 0;
+  flex: 1;
+  min-height: 280px;
+  resize: none;
+}
+
+.game-actions {
+  display: flex;
+  gap: 8px;
+  padding: 12px;
+  background-color: var(--pixel-darker);
+  border-top: 3px solid var(--pixel-border);
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+.game-submit-btn {
+  flex: 1;
+  min-width: 140px;
+  font-size: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.game-status-bar {
+  border-top: 2px solid var(--pixel-border);
+  padding: 10px;
+  background-color: var(--pixel-darker);
+  flex-shrink: 0;
+}

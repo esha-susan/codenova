@@ -1,35 +1,66 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import React, { useEffect } from 'react';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { GameProvider, useGame } from './context/GameContext';
+import TitleScreen from './components/TitleScreen';
+import AuthScreen from './components/AuthScreen';
+import AvatarScreen from './components/AvatarScreen';
+import MapScreen from './components/MapScreen';
+import GameScreen from './components/GameScreen';
+import AchievementPopup from './components/AchievementPopup';
+import './styles/global.css';
 
-function App() {
-  const [count, setCount] = useState(0)
+const AppRouter: React.FC = () => {
+  const { user, loading } = useAuth();
+  const { currentScreen, setScreen } = useGame();
 
-  return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
+  // Redirect unauthenticated users away from protected screens
+  useEffect(() => {
+    if (!loading && !user && !['title', 'auth'].includes(currentScreen)) {
+      setScreen('title');
+    }
+  }, [user, loading, currentScreen]);
+
+  if (loading) {
+    return (
+      <div style={{
+        width: '100vw',
+        height: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'var(--pixel-black)',
+      }}>
+        <div className="pixel-spinner" style={{ width: 48, height: 48 }} />
+        <p className="pixel-text pixel-text--gold" style={{ marginTop: 24, fontSize: 10 }}>
+          LOADING EMBERWOOD GRID...
         </p>
       </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
-  )
-}
+    );
+  }
 
-export default App
+  return (
+    <div style={{ width: '100%', minHeight: '100vh' }}>
+      {currentScreen === 'title' && <TitleScreen />}
+      {currentScreen === 'auth' && <AuthScreen />}
+      {currentScreen === 'avatar' && user && <AvatarScreen />}
+      {currentScreen === 'map' && user && <MapScreen />}
+      {currentScreen === 'game' && user && <GameScreen />}
+
+      {/* Global overlays */}
+      <AchievementPopup />
+    </div>
+  );
+};
+
+const App: React.FC = () => {
+  return (
+    <AuthProvider>
+      <GameProvider>
+        <AppRouter />
+      </GameProvider>
+    </AuthProvider>
+  );
+};
+
+export default App;
