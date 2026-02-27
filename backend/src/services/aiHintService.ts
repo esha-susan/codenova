@@ -2,10 +2,9 @@ import axios from 'axios';
 import { env } from '../config/env';
 import { HintRequest, HintResponse } from '../types';
 
-// Escalation thresholds
-const HINT_LEVEL_1_THRESHOLD = 1; // after 1st failure
-const HINT_LEVEL_2_THRESHOLD = 3; // after 3rd failure
-const HINT_LEVEL_3_THRESHOLD = 5; // after 5th failure
+const HINT_LEVEL_1_THRESHOLD = 1;
+const HINT_LEVEL_2_THRESHOLD = 3;
+const HINT_LEVEL_3_THRESHOLD = 5;
 
 const buildPrompt = (req: HintRequest, escalationLevel: 1 | 2 | 3): string => {
   const levelInstructions = {
@@ -61,6 +60,7 @@ const callOpenAI = async (prompt: string): Promise<string> => {
         Authorization: `Bearer ${env.OPENAI_API_KEY}`,
         'Content-Type': 'application/json',
       },
+      timeout: 15000,
     }
   );
   return response.data.choices[0].message.content;
@@ -80,9 +80,19 @@ const callAnthropic = async (prompt: string): Promise<string> => {
         'anthropic-version': '2023-06-01',
         'Content-Type': 'application/json',
       },
+      timeout: 15000,
     }
   );
   return response.data.content[0].text;
+};
+
+const getFallbackHint = (level: 1 | 2 | 3): string => {
+  const hints: Record<1 | 2 | 3, string> = {
+    1: `Young Initiate, the Grid whispers that the answer lies within the patterns you already know. Look not at what you have written, but at what the challenge asks of you. The Corruption feeds on confusion — clarity is your weapon. You carry the strength to see through the mist.`,
+    2: `Listen carefully, Initiate. Your code speaks, but does it speak the right language? Consider the SHAPE of your logic — does it iterate when it should? Does it transform when it must? The runes of Emberwood respond to structure. Review how your data flows from beginning to end. You are closer than you think.`,
+    3: `The hour grows urgent, Initiate, and the Corruption advances. Let me illuminate the path: your solution needs three phases — receive, transform, and return. Think of it as a spell with three incantations. First establish what you know. Then reshape it. Then present it. Do not fear pseudocode — sketch the skeleton before you give it flesh. You have the power.`,
+  };
+  return hints[level];
 };
 
 export const generateHint = async (req: HintRequest): Promise<HintResponse> => {
@@ -93,18 +103,30 @@ export const generateHint = async (req: HintRequest): Promise<HintResponse> => {
   const prompt = buildPrompt(req, escalationLevel);
 
   let hint: string;
+
   try {
     if (env.AI_PROVIDER === 'anthropic' && env.ANTHROPIC_API_KEY) {
       hint = await callAnthropic(prompt);
     } else if (env.OPENAI_API_KEY) {
       hint = await callOpenAI(prompt);
     } else {
-      // Fallback static hints if no AI key configured
-      hint = getFallbackHint(escalationLevel, req.attempt_count);
+      // No AI key configured — use static fallback
+      console.log('[AIHintService] No AI key configured, using fallback hints.');
+      hint = getFallbackHint(escalationLevel);
     }
-  } catch (err) {
-    console.error('[AIHintService] AI call failed, using fallback:', err);
-    hint = getFallbackHint(escalationLevel, req.attempt_count);
+  } catch (err: any) {
+    const status = err.response?.status;
+
+    if (status === 429) {
+      console.warn('[AIHintService] Rate limit hit (429). Using fallback hint.');
+    } else if (status === 401) {
+      console.warn('[AIHintService] Invalid API key (401). Using fallback hint.');
+    } else {
+      console.error('[AIHintService] AI call failed:', err.message);
+    }
+
+    // Always fall back gracefully — never let hint failure crash submission
+    hint = getFallbackHint(escalationLevel);
   }
 
   const dragonMessages: Record<1 | 2 | 3, string> = {
@@ -118,13 +140,4 @@ export const generateHint = async (req: HintRequest): Promise<HintResponse> => {
     escalation_level: escalationLevel,
     dragon_message: dragonMessages[escalationLevel],
   };
-};
-
-const getFallbackHint = (level: 1 | 2 | 3, attempt: number): string => {
-  const hints: Record<1 | 2 | 3, string> = {
-    1: `Young Initiate, the Grid whispers that the answer lies within the patterns you already know. Look not at what you have written, but at what the challenge asks of you. The Corruption feeds on confusion — clarity is your weapon. You carry the strength to see through the mist.`,
-    2: `Listen carefully, Initiate. Your code speaks, but does it speak the right language? Consider the SHAPE of your logic — does it iterate when it should? Does it transform when it must? The runes of Emberwood respond to structure. Review how your data flows from beginning to end. You are closer than you think.`,
-    3: `The hour grows urgent, Initiate, and the Corruption advances. Let me illuminate the path: your solution needs three phases — receive, transform, and return. Think of it as a spell with three incantations. First establish what you know. Then reshape it. Then present it. Do not fear pseudocode — sketch the skeleton before you give it flesh. You have the power.`,
-  };
-  return hints[level];
 };

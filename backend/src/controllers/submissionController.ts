@@ -1,10 +1,23 @@
 import { Response, NextFunction } from 'express';
 import { AuthenticatedRequest } from '../middleware/auth';
 import { supabaseAdmin } from '../config/supabase';
-import { executeCode } from '../services/judge0Service';
+import { executeCode } from '../services/localPythonService';
 import { generateHint } from '../services/aiHintService';
 import { awardXP, checkAndUnlockAchievements } from '../services/xpService';
-import { SubmissionRequest, SubmissionResponse, JUDGE0_STATUS } from '../types';
+import { SubmissionRequest, SubmissionResponse } from '../types';
+
+// Safe wrapper — hint failure never crashes the submission
+const safeGenerateHint = async (
+  ...args: Parameters<typeof generateHint>
+): Promise<string> => {
+  try {
+    const result = await generateHint(...args);
+    return result.hint;
+  } catch (err) {
+    console.warn('[Submission] Hint generation failed silently:', err);
+    return 'The Dragon Mother is momentarily unreachable. Trust your instincts, Initiate.';
+  }
+};
 
 export const submitCode = async (
   req: AuthenticatedRequest,
@@ -75,12 +88,12 @@ export const submitCode = async (
       .eq('user_id', userId)
       .eq('checkpoint_id', checkpoint_id);
 
-    // 4. Execute code via Judge0
+    // 4. Execute code via Piston
     const executionResult = await executeCode(code, checkpoint.test_input ?? undefined);
 
     // 5. Check for execution errors
     if (executionResult.error_type === 'timeout') {
-      const hint = await generateHint({
+      const hint = await safeGenerateHint({
         checkpoint_id,
         code,
         error_output: 'Time Limit Exceeded — infinite loop detected',
@@ -93,7 +106,7 @@ export const submitCode = async (
         updated_xp: await getCurrentXP(userId),
         updated_progress: await getProgress(userId, checkpoint_id),
         sfx_trigger: 'error',
-        hint: hint.hint,
+        hint,
         error_type: 'timeout',
       };
       res.json(response);
@@ -102,7 +115,7 @@ export const submitCode = async (
 
     if (executionResult.error_type === 'syntax') {
       const errorMsg = executionResult.compile_output || executionResult.stderr;
-      const hint = await generateHint({
+      const hint = await safeGenerateHint({
         checkpoint_id,
         code,
         error_output: errorMsg,
@@ -115,7 +128,7 @@ export const submitCode = async (
         updated_xp: await getCurrentXP(userId),
         updated_progress: await getProgress(userId, checkpoint_id),
         sfx_trigger: 'error',
-        hint: hint.hint,
+        hint,
         error_type: 'syntax',
       };
       res.json(response);
@@ -124,7 +137,7 @@ export const submitCode = async (
 
     if (executionResult.error_type === 'runtime') {
       const errorMsg = executionResult.stderr;
-      const hint = await generateHint({
+      const hint = await safeGenerateHint({
         checkpoint_id,
         code,
         error_output: errorMsg,
@@ -137,7 +150,7 @@ export const submitCode = async (
         updated_xp: await getCurrentXP(userId),
         updated_progress: await getProgress(userId, checkpoint_id),
         sfx_trigger: 'error',
-        hint: hint.hint,
+        hint,
         error_type: 'runtime',
       };
       res.json(response);
@@ -182,7 +195,7 @@ export const submitCode = async (
       res.json(response);
     } else {
       // Wrong answer
-      const hint = await generateHint({
+      const hint = await safeGenerateHint({
         checkpoint_id,
         code,
         error_output: `Expected: "${expectedOutput}" but got: "${actualOutput}"`,
@@ -195,7 +208,7 @@ export const submitCode = async (
         updated_xp: await getCurrentXP(userId),
         updated_progress: await getProgress(userId, checkpoint_id),
         sfx_trigger: 'failure',
-        hint: hint.hint,
+        hint,
         error_type: 'wrong_output',
       };
       res.json(response);
