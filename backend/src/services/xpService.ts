@@ -1,19 +1,24 @@
 import { supabaseAdmin } from '../config/supabase';
 import { Achievement } from '../types';
 
-const LEVEL_THRESHOLDS = [0, 100, 250, 500, 900, 1400, 2100, 3000];
+const LEVEL_THRESHOLDS = [0, 100, 250, 500, 900, 1400, 2100, 3000, 4000, 5500, 7500];
 
-// Map checkpoint order_index → achievement key awarded on completion
+// Per-checkpoint achievement keys
 const CHECKPOINT_ACHIEVEMENT_MAP: Record<number, string> = {
-  1: 'restored_greeting',
-  2: 'restored_loop',
-  3: 'restored_string',
-  4: 'restored_list',
-  5: 'restored_dict',
-  6: 'restored_recursion',
-  7: 'restored_palindrome',
-  8: 'dragon_sigil',
+  1:  'restored_greeting',
+  2:  'restored_loop',
+  3:  'restored_string',
+  4:  'restored_list',
+  5:  'restored_dict',
+  6:  'restored_recursion',
+  7:  'restored_palindrome',
+  8:  'dragon_sigil_1',
+  9:  'dragon_sigil_2',
+  10: 'dragon_sigil',
 };
+
+// Finale checkpoint order indices
+const FINALE_ORDER_INDICES = [8, 9, 10];
 
 export const getLevelFromXP = (xp: number): number => {
   for (let i = LEVEL_THRESHOLDS.length - 1; i >= 0; i--) {
@@ -52,35 +57,80 @@ export const awardXP = async (
   return { new_xp, new_level, leveled_up: new_level > old_level };
 };
 
-// Unlock the next checkpoint after completing the current one
 export const unlockNextCheckpoint = async (
   userId: string,
   completedOrderIndex: number
 ): Promise<void> => {
-  const nextOrderIndex = completedOrderIndex + 1;
+  // If completing level 7, unlock all 3 finale challenges at once
+  if (completedOrderIndex === 7) {
+    console.log('[XP] Level 7 complete — unlocking all 3 finale challenges');
+    for (const finaleIndex of FINALE_ORDER_INDICES) {
+      await unlockCheckpointByIndex(userId, finaleIndex);
+    }
+    return;
+  }
 
-  const { data: nextCheckpoint } = await supabaseAdmin
-    .from('checkpoints')
-    .select('id')
-    .eq('order_index', nextOrderIndex)
-    .single();
+  // For levels 1–6, unlock the next single checkpoint
+  if (completedOrderIndex < 7) {
+    await unlockCheckpointByIndex(userId, completedOrderIndex + 1);
+  }
 
-  if (!nextCheckpoint) return;
-
-  await supabaseAdmin
-    .from('user_progress')
-    .upsert(
-      {
-        user_id: userId,
-        checkpoint_id: nextCheckpoint.id,
-        status: 'unlocked',
-        attempt_count: 0,
-      },
-      { onConflict: 'user_id,checkpoint_id' }
-    );
+  // Finale challenges (8, 9, 10) are all unlocked at once when level 7 completes
+  // so no sequential unlocking needed within the finale
 };
 
-// Grant an achievement if the user does not already have it
+const unlockCheckpointByIndex = async (
+  userId: string,
+  orderIndex: number
+): Promise<void> => {
+  const { data: checkpoint, error } = await supabaseAdmin
+    .from('checkpoints')
+    .select('id, title')
+    .eq('order_index', orderIndex)
+    .single();
+
+  if (error || !checkpoint) {
+    console.log(`[XP] No checkpoint at order_index ${orderIndex}`);
+    return;
+  }
+
+  console.log(`[XP] Unlocking: ${checkpoint.title} (order ${orderIndex})`);
+
+  const { data: existing } = await supabaseAdmin
+    .from('user_progress')
+    .select('id, status')
+    .eq('user_id', userId)
+    .eq('checkpoint_id', checkpoint.id)
+    .maybeSingle();
+
+  if (existing) {
+    if (existing.status === 'locked') {
+      await supabaseAdmin
+        .from('user_progress')
+        .update({ status: 'unlocked', updated_at: new Date().toISOString() })
+        .eq('id', existing.id);
+      console.log(`[XP] Updated to unlocked: order_index ${orderIndex}`);
+    } else {
+      console.log(`[XP] Already ${existing.status}: order_index ${orderIndex}`);
+    }
+  } else {
+    const { error: insertError } = await supabaseAdmin
+      .from('user_progress')
+      .insert({
+        user_id: userId,
+        checkpoint_id: checkpoint.id,
+        status: 'unlocked',
+        attempt_count: 0,
+      });
+
+    if (insertError) {
+      console.error(`[XP] Failed to insert progress for order_index ${orderIndex}:`, insertError.message);
+    } else {
+      console.log(`[XP] Inserted unlocked row: order_index ${orderIndex}`);
+    }
+  }
+};
+
 const grantAchievement = async (
   userId: string,
   achievementKey: string
@@ -131,7 +181,7 @@ export const checkAndUnlockAchievements = async (
     if (ach) return ach;
   }
 
-  // 2. Spark of the Grid — very first completion
+  // 2. Spark of the Grid — very first achievement ever
   const { data: allUserAch } = await supabaseAdmin
     .from('user_achievements')
     .select('id')
@@ -142,13 +192,13 @@ export const checkAndUnlockAchievements = async (
     if (ach) return ach;
   }
 
-  // 3. Flawless Initiate — first attempt success
+  // 3. Flawless Initiate — solved on first attempt
   if (attemptCount === 1) {
     const ach = await grantAchievement(userId, 'flawless_initiate');
     if (ach) return ach;
   }
 
-  // 4. Halfway There — 4 hunts completed
+  // 4. Halfway There — 4 of the first 7 hunts completed
   const { data: completedProgress } = await supabaseAdmin
     .from('user_progress')
     .select('id')
@@ -162,8 +212,8 @@ export const checkAndUnlockAchievements = async (
     if (ach) return ach;
   }
 
-  // 5. Full Restoration — all 8 completed
-  if (completedCount === 8) {
+  // 5. Full Restoration — all 10 checkpoints completed (7 hunts + 3 finale)
+  if (completedCount === 10) {
     const ach = await grantAchievement(userId, 'full_restoration');
     if (ach) return ach;
   }

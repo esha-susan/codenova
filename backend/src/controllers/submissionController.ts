@@ -149,8 +149,8 @@ export const submitCode = async (
     }
 
     // 6. Compare output
-    const actualOutput = (executionResult.stdout ?? '').trim();
-    const expectedOutput = checkpoint.expected_output.trim();
+    const actualOutput = (executionResult.stdout ?? '').replace(/\r/g, '').trim();
+    const expectedOutput = checkpoint.expected_output.replace(/\r/g, '').trim();
     const isCorrect = actualOutput === expectedOutput;
 
     console.log('[Submission] Output comparison:', {
