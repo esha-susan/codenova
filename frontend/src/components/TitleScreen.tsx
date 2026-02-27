@@ -1,96 +1,190 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useGame } from '../context/GameContext';
+
+// ── Adjust this path to match your folder structure ──
+// If this file is in src/screens/ and CSS is in src/styles/: '../styles/TitleScreen.css'
+// If both files are in the same folder:                       './TitleScreen.css'
 import '../styles/TitleScreen.css';
+
+/* ── Seeded RNG — stable across renders, no hydration mismatch ── */
+const sr = (s: number) => { const x = Math.sin(s + 1) * 10000; return x - Math.floor(x); };
+
+const buildStars = (n: number) =>
+  Array.from({ length: n }, (_, i) => {
+    const r = (o: number) => sr(i * 7 + o);
+    return {
+      id: i,
+      left: `${r(1) * 100}%`,
+      top:  `${r(2) * 100}%`,
+      size: r(0) > .84 ? '4px' : r(3) > .5 ? '3px' : '2px',
+      op:   `${.3 + r(6) * .7}`,
+      td:   `${2.5 + r(4) * 3.5}s`,
+      dl:   `${r(5) * 5}s`,
+    };
+  });
+
+const PCOLS = ['#f0c040', '#ff6b2b', '#00e5ff', '#c084fc', '#ffe566'];
+const buildParticles = (n: number) =>
+  Array.from({ length: n }, (_, i) => {
+    const r = (o: number) => sr(i * 11 + o + 200);
+    const col = PCOLS[Math.floor(r(4) * PCOLS.length)];
+    return {
+      id:  i,
+      left:`${r(0) * 100}%`,
+      col,
+      pd:  `${6 + r(1) * 9}s`,
+      pdl: `${r(2) * 14}s`,
+      px:  `${(r(3) - .5) * 80}px`,
+    };
+  });
 
 const TitleScreen: React.FC = () => {
   const { setScreen } = useGame();
-  const [showPrompt, setShowPrompt] = useState(true);
+  const [pressVisible, setPressVisible] = useState(true);
 
+  const stars     = useMemo(() => buildStars(75), []);
+  const particles = useMemo(() => buildParticles(22), []);
+
+  /* Asymmetric slow blink — visible 1050 ms, hidden 400 ms */
   useEffect(() => {
-    const interval = setInterval(() => setShowPrompt((v) => !v), 700);
-    return () => clearInterval(interval);
+    let v = true;
+    let id: ReturnType<typeof setTimeout>;
+    const blink = () => {
+      v = !v;
+      setPressVisible(v);
+      id = setTimeout(blink, v ? 1050 : 400);
+    };
+    id = setTimeout(blink, 1050);
+    return () => clearTimeout(id);
   }, []);
 
+  /* Keyboard shortcut */
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Enter' || e.key === ' ') setScreen('auth');
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [setScreen]);
+
   return (
-    <div className="title-screen">
-      {/* Star field background */}
-      <div className="title-stars" aria-hidden="true">
-        {Array.from({ length: 60 }).map((_, i) => (
-            <div
-            key={i}
-            className="title-star"
+    <div className="ts">
+
+      {/* ── BG ── */}
+      <div className="ts-aurora" aria-hidden="true">
+        <div className="ts-ab" />
+        <div className="ts-ab" />
+        <div className="ts-ab" />
+      </div>
+      <div className="ts-grid"     aria-hidden="true" />
+      <div className="ts-scanlines" aria-hidden="true" />
+      <div className="ts-vignette"  aria-hidden="true" />
+
+      {/* ── STARS ── */}
+      <div className="ts-stars" aria-hidden="true">
+        {stars.map(s => (
+          <div
+            key={s.id}
+            className="ts-star"
             style={{
-              /* FIXED: Added backticks (`) and ensured units are correct */
-              left: `${Math.random() * 100}%`,
-              top: `${Math.random() * 100}%`,
-              animationDelay: `${Math.random() * 3}s`,
-              width: Math.random() > 0.8 ? '4px' : '2px',
-              height: Math.random() > 0.8 ? '4px' : '2px',
-            }}
+              left: s.left, top: s.top, width: s.size, height: s.size,
+              opacity: s.op,
+              '--td': s.td, '--dl': s.dl, '--op': s.op,
+            } as React.CSSProperties}
           />
         ))}
       </div>
 
-      {/* Dragon silhouette deco */}
-      <div className="title-dragon-deco" aria-hidden="true">🐉</div>
+      {/* ── PARTICLES ── */}
+      <div aria-hidden="true">
+        {particles.map(p => (
+          <div
+            key={p.id}
+            className="ts-particle"
+            style={{
+              left: p.left,
+              background: p.col,
+              boxShadow: `0 0 6px ${p.col}`,
+              '--pd': p.pd, '--pdl': p.pdl, '--px': p.px,
+            } as React.CSSProperties}
+          />
+        ))}
+      </div>
 
-      <div className="title-content">
-        {/* Logo */}
-        <div className="title-logo-wrapper">
-          <div className="title-logo-line title-logo-line--top">[ CODE NOVA ]</div>
-          <h1 className="pixel-title title-main-title">EMBERWOOD</h1>
-          <div className="title-logo-line title-logo-line--sub">AN INITIATE'S JOURNEY</div>
+      {/* ── DRAGONS ── */}
+      <div className="ts-dragon"   aria-hidden="true">🐉</div>
+      <div className="ts-dragon-2" aria-hidden="true">🐉</div>
+
+      {/* ══════════ CONTENT ══════════ */}
+      <div className="ts-content">
+
+        {/* Header */}
+        <div className="ts-header ta d1">
+          <em>[</em>&nbsp;CODE NOVA&nbsp;<em>]</em>
         </div>
 
-        {/* Decorative divider */}
-        <div className="title-divider">
-          <span>═══════</span>
-          <span className="title-divider-gem">◆</span>
-          <span>═══════</span>
+        {/* Pixel title */}
+        <div className="ts-logo-wrap ta d2">
+          <h1 className="ts-title" data-text="HERCODE ODYSSEY">
+            HERCODE<br />ODYSSEY
+          </h1>
+          <div className="ts-subtitle">AN INITIATE'S JOURNEY</div>
+        </div>
+
+        {/* Underline */}
+        <div className="ts-px-line ta d3" aria-hidden="true" />
+
+        {/* Divider */}
+        <div className="ts-divider ta d3" aria-hidden="true">
+          <span className="ts-div-line">══════</span>
+          <span className="ts-gem">◆</span>
+          <span className="ts-div-line">══════</span>
         </div>
 
         {/* Tagline */}
-        <p className="pixel-subtitle title-tagline">
+        <p className="ts-tagline ta d4">
           Where logic shapes reality.<br />
           Where dragons guard the laws of structure.
         </p>
 
-        {/* Version / credits */}
-        <div className="title-meta pixel-text pixel-text--dim">
-          VER 1.0 — VERTICAL SLICE
-        </div>
-
         {/* CTA */}
-        <div className="title-cta-wrapper">
-          {showPrompt && (
-            <div className="title-prompt pixel-text pixel-text--gold">
-              ▶ PRESS START TO ENTER EMBERWOOD ◀
-            </div>
-          )}
-          <button
-            className="pixel-btn title-start-btn"
-            onClick={() => setScreen('auth')}
+        <div className="ts-cta-wrap ta d5">
+          <div
+            className="ts-press"
+            aria-live="polite"
+            style={{ opacity: pressVisible ? 1 : 0 }}
           >
-            ⚔ BEGIN YOUR JOURNEY ⚔
-          </button>
+            ◀ PRESS START TO ENTER THE GRID ▶
+          </div>
+
+          <div className="ts-btn-wrap">
+            <div className="ts-btn-glow" aria-hidden="true" />
+            <button
+              className="ts-btn"
+              onClick={() => setScreen('auth')}
+              aria-label="Begin your journey"
+            >
+              ⚔&nbsp; BEGIN YOUR JOURNEY &nbsp;⚔
+            </button>
+          </div>
         </div>
 
-        {/* Narrative blurb */}
-        <div className="title-lore pixel-panel">
-          <p className="pixel-text">
+        {/* Lore */}
+        <div className="ts-lore ta d6">
+          <p>
             The Corruption spreads. Runes fracture. The Academy calls for Initiates
             who can restore the broken Grid of Emberwood through the power of code.
           </p>
-          <p className="pixel-text mt-8 pixel-text--dim">
-            Only those who master both creation and correction may earn the Dragon Sigil.
-          </p>
+          <p>Only those who master both creation and correction may earn the Dragon Sigil.</p>
         </div>
+
       </div>
 
-      {/* Bottom credits */}
-      <div className="title-footer pixel-text pixel-text--dim">
-        INSPIRED BY ADA LOVELACE · DESIGNED FOR WOMEN IN TECH
-      </div>
+      {/* Footer */}
+      <footer className="ts-footer ta d7">
+        INSPIRED BY ADA LOVELACE &nbsp;·&nbsp; DESIGNED FOR WOMEN IN TECH
+      </footer>
+
     </div>
   );
 };

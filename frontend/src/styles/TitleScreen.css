@@ -1,166 +1,466 @@
-.title-screen {
+/* ============================================================
+   SAVE THIS FILE TO:  src/styles/TitleScreen.css
+   IMPORT IN TSX:      import './TitleScreen.css'
+   (if TitleScreen.tsx is in src/screens/ use '../styles/TitleScreen.css')
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Share+Tech+Mono&display=swap');
+
+@property --angle { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
+
+/* ── VARIABLES ── */
+:root {
+  --gold:        #f0c040;
+  --gold-bright: #ffe566;
+  --gold-dark:   #b8860b;
+  --gold-glow:   rgba(240, 192, 64, 0.55);
+  --ember:       #ff6b2b;
+  --cyan:        #00e5ff;
+  --text-normal: #d4c8f0;
+  --text-dim:    #4a3a6a;
+  --fp: 'Press Start 2P', monospace;
+  --fm: 'Share Tech Mono', monospace;
+}
+
+/* ── BASE ── */
+.ts {
   width: 100%;
   min-height: 100vh;
-  background: radial-gradient(ellipse at center, #1a1028 0%, #0a0a0f 70%);
+  background: radial-gradient(ellipse at 50% 45%, #1c0f38 0%, #0d0918 58%, #060610 100%);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   position: relative;
   overflow: hidden;
-  padding: 40px 20px;
+  padding: 40px 24px 60px;
+  gap: 0;
 }
 
-/* Stars */
-.title-stars {
+/* ── AURORA ── */
+.ts-aurora {
+  position: absolute; inset: 0;
+  pointer-events: none; z-index: 0; overflow: hidden;
+}
+.ts-ab {
+  position: absolute; left: -20%; width: 140%; height: 220px;
+  border-radius: 50%; filter: blur(70px); opacity: 0;
+  animation: ts-aurora 12s ease-in-out infinite;
+}
+.ts-ab:nth-child(1) {
+  top: 5%;
+  background: linear-gradient(90deg, transparent, rgba(100,30,210,.22), rgba(55,15,155,.26), transparent);
+  animation-duration: 14s;
+}
+.ts-ab:nth-child(2) {
+  top: 30%;
+  background: linear-gradient(90deg, transparent, rgba(240,192,64,.08), rgba(175,55,255,.13), transparent);
+  animation-delay: -5s; animation-duration: 11s;
+}
+.ts-ab:nth-child(3) {
+  bottom: 5%;
+  background: linear-gradient(90deg, transparent, rgba(255,107,43,.07), rgba(100,40,200,.10), transparent);
+  animation-delay: -9s; animation-duration: 17s;
+}
+@keyframes ts-aurora {
+  0%   { opacity: 0;    transform: translateX(-10%) scaleY(0.8); }
+  25%  { opacity: 1; }
+  75%  { opacity: 0.85; }
+  100% { opacity: 0;    transform: translateX(10%)  scaleY(1.2); }
+}
+
+/* ── GRID FLOOR ── */
+.ts-grid {
+  position: absolute; bottom: 0; left: -10%; width: 120%; height: 40%;
+  pointer-events: none; z-index: 1;
+  background:
+    linear-gradient(rgba(240,192,64,.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(240,192,64,.055) 1px, transparent 1px);
+  background-size: 54px 54px;
+  transform: perspective(520px) rotateX(65deg);
+  transform-origin: bottom center;
+  animation: ts-gpulse 4s ease-in-out infinite;
+  mask-image: linear-gradient(to bottom, transparent, rgba(0,0,0,.4) 28%, black);
+  -webkit-mask-image: linear-gradient(to bottom, transparent, rgba(0,0,0,.4) 28%, black);
+}
+@keyframes ts-gpulse { 0%, 100% { opacity: .5; } 50% { opacity: 1; } }
+
+/* ── SCANLINES ── */
+.ts-scanlines {
+  position: absolute; inset: 0;
+  pointer-events: none; z-index: 2;
+  background: repeating-linear-gradient(
+    0deg, transparent, transparent 3px,
+    rgba(0,0,0,.055) 3px, rgba(0,0,0,.055) 4px
+  );
+}
+
+/* ── VIGNETTE ── */
+.ts-vignette {
+  position: absolute; inset: 0;
+  pointer-events: none; z-index: 3;
+  background: radial-gradient(ellipse at center, transparent 28%, rgba(0,0,0,.40) 68%, rgba(0,0,0,.88) 100%);
+}
+
+/* ── STARS ── */
+.ts-stars {
+  position: absolute; inset: 0;
+  pointer-events: none; z-index: 1;
+}
+.ts-star {
   position: absolute;
-  inset: 0;
-  pointer-events: none;
+  border-radius: 50%;
+  background: #f0f0ff;
+  animation: ts-twinkle var(--td, 3s) steps(3) var(--dl, 0s) infinite;
+}
+@keyframes ts-twinkle {
+  0%, 100% { opacity: var(--op, .8); transform: scale(1); }
+  33%       { opacity: .05; transform: scale(.5); }
+  66%       { opacity: .5;  transform: scale(1.2); }
 }
 
-.title-star {
+/* ── PARTICLES ── */
+.ts-particle {
   position: absolute;
-  background-color: #f0f0ff;
-  animation: twinkle 3s step-end infinite;
+  border-radius: 50%;
+  width: 3px; height: 3px;
+  pointer-events: none; z-index: 2; opacity: 0;
+  animation: ts-prise var(--pd, 8s) linear var(--pdl, 0s) infinite;
+}
+@keyframes ts-prise {
+  0%   { transform: translate(0, 0) scale(1); opacity: 0; }
+  8%   { opacity: .85; }
+  90%  { opacity: .2; }
+  100% { transform: translate(var(--px, 20px), -100vh) scale(.2); opacity: 0; }
 }
 
-@keyframes twinkle {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.1; }
+/* ── DRAGONS ── */
+.ts-dragon {
+  position: absolute; top: 14px; right: 20px;
+  font-size: clamp(60px, 8vw, 110px);
+  opacity: .07; pointer-events: none; z-index: 2; user-select: none;
+  filter: sepia(1) hue-rotate(260deg) saturate(2.2) brightness(1.5);
+  animation: ts-dfloat 5.5s ease-in-out infinite;
+}
+.ts-dragon-2 {
+  position: absolute; bottom: 80px; left: 8px;
+  font-size: clamp(36px, 4.5vw, 64px);
+  opacity: .04; pointer-events: none; z-index: 2; user-select: none;
+  filter: sepia(1) hue-rotate(200deg) saturate(3);
+  animation: ts-dfloat2 7s ease-in-out 2s infinite;
+}
+@keyframes ts-dfloat {
+  0%, 100% { transform: translateY(0) rotate(-4deg); }
+  50%       { transform: translateY(-16px) rotate(2deg); }
+}
+@keyframes ts-dfloat2 {
+  0%, 100% { transform: scaleX(-1) translateY(0) rotate(3deg); }
+  50%       { transform: scaleX(-1) translateY(-12px) rotate(-2deg); }
 }
 
-/* Dragon deco */
-.title-dragon-deco {
-  position: absolute;
-  top: 20px;
-  right: 30px;
-  font-size: 80px;
-  opacity: 0.08;
-  filter: sepia(1) hue-rotate(280deg);
-  animation: float-deco 4s ease-in-out infinite;
-  pointer-events: none;
+/* ── ENTRANCE ANIMATIONS ── */
+.ta { opacity: 0; animation: ts-fsu .75s cubic-bezier(.22,1,.36,1) forwards; }
+.d1 { animation-delay: .10s; }
+.d2 { animation-delay: .30s; }
+.d3 { animation-delay: .52s; }
+.d4 { animation-delay: .72s; }
+.d5 { animation-delay: .92s; }
+.d6 { animation-delay: 1.12s; }
+.d7 { animation-delay: 1.32s; }
+@keyframes ts-fsu {
+  from { opacity: 0; transform: translateY(24px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
-@keyframes float-deco {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-10px); }
-}
-
-/* Content */
-.title-content {
+/* ── CONTENT WRAPPER ── */
+.ts-content {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 24px;
+  gap: 22px;
   max-width: 680px;
   width: 100%;
-  z-index: 1;
+  z-index: 10;
+  position: relative;
 }
 
-/* Logo */
-.title-logo-wrapper {
-  text-align: center;
+/* ── CODE NOVA HEADER ── */
+.ts-header {
+  font-family: var(--fm);
+  font-size: clamp(7px, 1.1vw, 10px);
+  letter-spacing: 8px;
+  color: var(--gold-dark);
+  text-transform: uppercase;
+}
+.ts-header em {
+  color: var(--gold);
+  font-style: normal;
+  animation: ts-bkbr 2.8s step-end infinite;
+}
+@keyframes ts-bkbr {
+  0%, 72%, 100% { opacity: 1; }
+  76%            { opacity: .1; }
+}
+
+/* ── PIXEL TITLE ── */
+.ts-logo-wrap {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-}
-
-.title-logo-line {
-  font-family: var(--font-pixel);
-  font-size: 10px;
-  letter-spacing: 4px;
-  color: var(--ember-gold-dark);
-  text-shadow: 1px 1px 0 rgba(0,0,0,0.8);
-}
-
-.title-logo-line--sub {
-  font-size: 8px;
-  color: var(--text-dim);
-  letter-spacing: 6px;
-}
-
-.title-main-title {
-  font-size: clamp(28px, 5vw, 48px);
-  animation: title-glow 3s ease-in-out infinite;
-}
-
-@keyframes title-glow {
-  0%, 100% { text-shadow: 2px 2px 0 var(--ember-gold-dark), 4px 4px 0 rgba(0,0,0,0.5), 0 0 20px rgba(240,192,64,0.3); }
-  50% { text-shadow: 2px 2px 0 var(--ember-gold-dark), 4px 4px 0 rgba(0,0,0,0.5), 0 0 40px rgba(240,192,64,0.6); }
-}
-
-/* Divider */
-.title-divider {
-  display: flex;
   align-items: center;
-  gap: 8px;
-  font-family: var(--font-terminal);
-  font-size: 24px;
-  color: var(--ember-gold-dark);
+  gap: 10px;
+}
+
+.ts-title {
+  font-family: var(--fp);                /* Press Start 2P = true pixel font */
+  font-size: clamp(20px, 4.2vw, 48px);
   letter-spacing: 2px;
-}
-
-.title-divider-gem {
-  color: var(--ember-gold);
-  animation: gem-spin 4s steps(4) infinite;
-}
-
-@keyframes gem-spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
-
-/* Tagline */
-.title-tagline {
+  line-height: 1.25;
   text-align: center;
-  line-height: 1.8;
+  color: var(--gold);
+  position: relative;
+  image-rendering: pixelated;
+  /* 8-bit hard stacked shadow — no blur, pure pixel offsets */
+  text-shadow:
+    2px  2px  0 #c8930a,
+    4px  4px  0 #9c6600,
+    6px  6px  0 #6e4200,
+    8px  8px  0 #3e2200,
+    10px 10px 0 #1a0e00,
+    0 0 22px rgba(240,192,64,.30),
+    0 0 55px rgba(240,192,64,.14);
+  animation: ts-titleglow 3.5s ease-in-out infinite;
+}
+@keyframes ts-titleglow {
+  0%, 100% {
+    text-shadow:
+      2px 2px 0 #c8930a, 4px 4px 0 #9c6600,
+      6px 6px 0 #6e4200, 8px 8px 0 #3e2200, 10px 10px 0 #1a0e00,
+      0 0 22px rgba(240,192,64,.30), 0 0 55px rgba(240,192,64,.14);
+  }
+  50% {
+    text-shadow:
+      2px 2px 0 #c8930a, 4px 4px 0 #9c6600,
+      6px 6px 0 #6e4200, 8px 8px 0 #3e2200, 10px 10px 0 #1a0e00,
+      0 0 32px rgba(240,192,64,.65), 0 0 80px rgba(240,192,64,.30),
+      0 0 120px rgba(240,192,64,.10);
+  }
+}
+/* Cyan glitch — top slice */
+.ts-title::before {
+  content: attr(data-text);
+  position: absolute; top: 0; left: 0; width: 100%;
+  font: inherit; color: var(--cyan); text-shadow: none;
+  clip-path: polygon(0 0, 100% 0, 100% 36%, 0 36%);
+  animation: ts-gtop 8s steps(1) infinite;
+}
+/* Ember glitch — bottom slice */
+.ts-title::after {
+  content: attr(data-text);
+  position: absolute; top: 0; left: 0; width: 100%;
+  font: inherit; color: var(--ember); text-shadow: none;
+  clip-path: polygon(0 64%, 100% 64%, 100% 100%, 0 100%);
+  animation: ts-gbot 8s steps(1) .6s infinite;
+}
+@keyframes ts-gtop {
+  0%, 84%, 100% { opacity: 0; transform: translate(0); }
+  85%  { opacity: .88; transform: translate(-5px, -2px); }
+  87%  { opacity: .88; transform: translate( 5px,  1px); }
+  89%  { opacity: 0;   transform: translate(0); }
+}
+@keyframes ts-gbot {
+  0%, 87%, 100% { opacity: 0; transform: translate(0); }
+  88%  { opacity: .78; transform: translate( 5px,  2px); }
+  90%  { opacity: .78; transform: translate(-4px, -1px); }
+  92%  { opacity: 0;   transform: translate(0); }
+}
+
+.ts-subtitle {
+  font-family: var(--fp);
+  font-size: clamp(4px, .85vw, 7px);
+  letter-spacing: 7px;
+  color: var(--text-dim);
+}
+
+/* ── PIXEL UNDERLINE ── */
+.ts-px-line {
+  width: 100%; max-width: 400px; height: 4px;
+  background: linear-gradient(90deg,
+    transparent, var(--gold-dark) 20%, var(--gold) 50%, var(--gold-dark) 80%, transparent);
+  position: relative;
+  animation: ts-lshimmer 3s ease-in-out infinite;
+}
+.ts-px-line::before,
+.ts-px-line::after {
+  content: ''; position: absolute; top: -4px;
+  width: 4px; height: 4px;
+  background: var(--gold); box-shadow: 0 0 8px var(--gold-glow);
+}
+.ts-px-line::before { left: 20%; }
+.ts-px-line::after  { right: 20%; }
+@keyframes ts-lshimmer {
+  0%, 100% { opacity: .5; }
+  50%       { opacity: 1; box-shadow: 0 0 14px var(--gold-glow); }
+}
+
+/* ── DIVIDER ── */
+.ts-divider {
+  display: flex; align-items: center; gap: 12px;
+  font-family: var(--fm);
+  font-size: clamp(14px, 2.2vw, 20px);
+  color: var(--gold-dark);
+  user-select: none;
+}
+.ts-div-line {
+  animation: ts-dlpulse 2.5s ease-in-out infinite;
+}
+@keyframes ts-dlpulse {
+  0%, 100% { opacity: .4; }
+  50%       { opacity: 1; text-shadow: 0 0 10px var(--gold-glow); }
+}
+.ts-gem {
+  color: var(--gold);
+  display: inline-block;
+  animation: ts-gspin 4s steps(4) infinite;
+  filter: drop-shadow(0 0 6px var(--gold-glow));
+}
+@keyframes ts-gspin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* ── TAGLINE ── */
+.ts-tagline {
+  font-family: var(--fp);
+  font-size: clamp(5px, 1vw, 8px);
+  line-height: 2.4;
+  letter-spacing: 1px;
+  text-align: center;
   color: var(--text-normal);
 }
 
-/* Meta */
-.title-meta {
-  font-size: 12px;
-  letter-spacing: 3px;
-  color: var(--text-dim);
-}
-
-/* CTA */
-.title-cta-wrapper {
+/* ── CTA ZONE ── */
+.ts-cta-wrap {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 16px;
-  min-height: 80px;
+  min-height: 85px;
 }
 
-.title-prompt {
-  font-size: 11px;
+/* PRESS START */
+.ts-press {
+  font-family: var(--fp);
+  font-size: clamp(6px, 1.1vw, 9px);
   letter-spacing: 2px;
-  animation: blink 0.7s step-end infinite;
+  color: var(--gold);
+  text-shadow: 0 0 14px var(--gold-glow);
+  transition: opacity .08s;
 }
 
-@keyframes blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0; }
+/* Button wrap + rotating border */
+.ts-btn-wrap {
+  position: relative;
+  display: inline-flex;
+}
+.ts-btn-glow {
+  position: absolute; inset: -5px; z-index: 0; opacity: .82;
+  background: conic-gradient(from var(--angle), var(--ember), var(--gold), var(--cyan), var(--ember));
+  clip-path: polygon(
+    5px 0%, calc(100% - 5px) 0%, 100% 5px,
+    100% calc(100% - 5px), calc(100% - 5px) 100%,
+    5px 100%, 0% calc(100% - 5px), 0% 5px
+  );
+  animation: ts-brotate 3s linear infinite;
+}
+@keyframes ts-brotate { to { --angle: 360deg; } }
+
+.ts-btn {
+  font-family: var(--fp);
+  font-size: clamp(7px, 1.2vw, 10px);
+  letter-spacing: 2px;
+  color: #110900;
+  background: linear-gradient(180deg, var(--gold-bright) 0%, var(--gold) 50%, var(--gold-dark) 100%);
+  border: none;
+  cursor: pointer;
+  position: relative; z-index: 1;
+  padding: clamp(13px, 2vw, 18px) clamp(22px, 4vw, 42px);
+  clip-path: polygon(
+    4px 0%, calc(100% - 4px) 0%, 100% 4px,
+    100% calc(100% - 4px), calc(100% - 4px) 100%,
+    4px 100%, 0% calc(100% - 4px), 0% 4px
+  );
+  transition: filter .15s, transform .15s, box-shadow .15s;
+  box-shadow: 0 5px 0 var(--gold-dark), 0 8px 24px rgba(240,192,64,.4);
+  image-rendering: pixelated;
+}
+.ts-btn::before {
+  content: '';
+  position: absolute; inset: 2px;
+  background: linear-gradient(180deg, rgba(255,255,255,.24) 0%, transparent 55%);
+  clip-path: inherit;
+}
+.ts-btn:hover {
+  filter: brightness(1.18) saturate(1.2);
+  transform: translateY(-3px);
+  box-shadow: 0 8px 0 var(--gold-dark), 0 14px 36px rgba(240,192,64,.65);
+}
+.ts-btn:active {
+  transform: translateY(3px);
+  box-shadow: 0 2px 0 var(--gold-dark), 0 4px 10px rgba(240,192,64,.3);
 }
 
-.title-start-btn {
-  font-size: 12px;
-  padding: 16px 32px;
-  background-color: var(--ember-gold);
-}
-
-/* Lore */
-.title-lore {
-  max-width: 560px;
+/* ── LORE PANEL ── */
+.ts-lore {
+  max-width: 580px;
   text-align: center;
+  background: linear-gradient(135deg, rgba(16,8,32,.93), rgba(8,4,18,.96));
+  border: 1px solid rgba(240,192,64,.16);
+  padding: clamp(14px, 2.5vw, 22px) clamp(18px, 3vw, 32px);
+  position: relative;
+  clip-path: polygon(
+    8px 0%, calc(100% - 8px) 0%, 100% 8px,
+    100% calc(100% - 8px), calc(100% - 8px) 100%,
+    8px 100%, 0% calc(100% - 8px), 0% 8px
+  );
+  animation: ts-loreglow 5s ease-in-out infinite;
+}
+@keyframes ts-loreglow {
+  0%, 100% { border-color: rgba(240,192,64,.16); }
+  50%       { border-color: rgba(240,192,64,.36); box-shadow: 0 0 22px rgba(240,192,64,.07); }
+}
+.ts-lore::before {
+  content: '◆'; position: absolute; top: 5px; left: 9px;
+  color: var(--gold-dark); font-size: 7px; opacity: .4;
+}
+.ts-lore::after {
+  content: '◆'; position: absolute; bottom: 5px; right: 9px;
+  color: var(--gold-dark); font-size: 7px; opacity: .4;
+}
+.ts-lore p {
+  font-family: var(--fp);
+  font-size: clamp(5px, 1vw, 7px);
+  line-height: 2.2;
+  color: var(--text-normal);
+  margin-bottom: 10px;
+}
+.ts-lore p:last-child {
+  color: var(--text-dim);
+  margin-bottom: 0;
 }
 
-/* Footer */
-.title-footer {
-  position: absolute;
-  bottom: 16px;
-  font-size: 9px;
-  letter-spacing: 3px;
+/* ── FOOTER ── */
+.ts-footer {
+  position: absolute; bottom: 14px; left: 0; right: 0;
+  font-family: var(--fm);
+  font-size: clamp(6px, .9vw, 8px);
+  letter-spacing: 4px;
   text-align: center;
+  color: var(--text-dim);
+  z-index: 10;
+}
+
+/* ── RESPONSIVE ── */
+@media (max-width: 480px) {
+  .ts-title { font-size: clamp(16px, 7vw, 30px); }
+  .ts-content { gap: 16px; }
 }
