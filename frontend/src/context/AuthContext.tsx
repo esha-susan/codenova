@@ -1,13 +1,13 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { supabase } from '../services/supabaseClient';
-import type { User, Session } from '@supabase/supabase-js';
+import type { User, Session, AuthChangeEvent } from '@supabase/supabase-js';
 
 interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
-  signInWithEmail: (email: string, password: string) => Promise<{ error: Error | null }>;
-  signUpWithEmail: (email: string, password: string) => Promise<{ error: Error | null }>;
+  signInWithEmail: (email: string, password: string) => Promise<{ error: any }>;
+  signUpWithEmail: (email: string, password: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
 }
 
@@ -19,6 +19,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Initialize session
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
@@ -28,15 +29,19 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setLoading(false);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.access_token) {
-        localStorage.setItem('codenova_token', session.access_token);
-      } else {
-        localStorage.removeItem('codenova_token');
+    // Explicitly typed parameters to resolve TS7006 and TS7031
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (_event: AuthChangeEvent, session: Session | null) => {
+        setSession(session);
+        setUser(session?.user ?? null);
+        if (session?.access_token) {
+          localStorage.setItem('codenova_token', session.access_token);
+        } else {
+          localStorage.removeItem('codenova_token');
+        }
+        setLoading(false);
       }
-    });
+    );
 
     return () => subscription.unsubscribe();
   }, []);
@@ -54,6 +59,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const signOut = async () => {
     await supabase.auth.signOut();
     localStorage.removeItem('codenova_token');
+    setUser(null);
+    setSession(null);
   };
 
   return (
