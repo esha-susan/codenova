@@ -1,8 +1,8 @@
-import axios from 'axios';
+import axios, { AxiosInstance, InternalAxiosRequestConfig, AxiosResponse, AxiosError } from 'axios';
 
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
-const api = axios.create({
+const api: AxiosInstance = axios.create({
   baseURL: API_BASE,
   headers: {
     'Content-Type': 'application/json',
@@ -10,7 +10,7 @@ const api = axios.create({
 });
 
 // Attach JWT token on every request
-api.interceptors.request.use((config) => {
+api.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   const token = localStorage.getItem('codenova_token');
   if (token && config.headers) {
     config.headers.Authorization = `Bearer ${token}`;
@@ -20,8 +20,8 @@ api.interceptors.request.use((config) => {
 
 // Global error handler
 api.interceptors.response.use(
-  (response) => response,
-  (error) => {
+  (response: AxiosResponse) => response,
+  (error: AxiosError) => {
     if (error.response?.status === 401) {
       localStorage.removeItem('codenova_token');
       window.location.href = '/';
