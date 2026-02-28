@@ -8,6 +8,7 @@ import MapScreen from './components/MapScreen';
 import GameScreen from './components/GameScreen';
 import AchievementPopup from './components/AchievementPopup';
 import './styles/global.css';
+import { MusicPlayer } from './MusicPlayer'; // Your music player import
 
 const AppRouter: React.FC = () => {
   const { user, loading } = useAuth();
@@ -41,6 +42,9 @@ const AppRouter: React.FC = () => {
 
   return (
     <div style={{ width: '100%', minHeight: '100vh' }}>
+      {/* ADDED THIS LINE: It will watch currentScreen and play game.mp3 */}
+      <MusicPlayer currentScreen={currentScreen} />
+
       {currentScreen === 'title' && <TitleScreen />}
       {currentScreen === 'auth' && <AuthScreen />}
       {currentScreen === 'avatar' && user && <AvatarScreen />}

@@ -3,23 +3,29 @@ import { useGame } from '../context/GameContext';
 import { apiSubmitCode, apiRequestHint } from '../services/api';
 import PhaserGame from './PhaserGame';
 import XPBar from './XPBar';
+import DragonHint, { HintData } from './DragonHint';
 import '../styles/GameScreen.css';
 
 const GameScreen: React.FC = () => {
   const {
-    profile, activeCheckpoint, narrativeText, hintText, isHintVisible,
-    setScreen, setNarrative, setHint, toggleHint, updateXP, showAchievement,
+    profile, activeCheckpoint, narrativeText,
+    setScreen, setNarrative, updateXP, showAchievement,
   } = useGame();
 
   const [code, setCode] = useState(activeCheckpoint?.starter_code ?? '# Write your Python code here\n');
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSubmitting, setIsSubmitting]     = useState(false);
   const [isFetchingHint, setIsFetchingHint] = useState(false);
-  const [resultStatus, setResultStatus] = useState<'none' | 'success' | 'failure' | 'error'>('none');
+  const [resultStatus, setResultStatus]     = useState<'none' | 'success' | 'failure' | 'error'>('none');
   const [triggerSuccess, setTriggerSuccess] = useState(false);
   const [triggerFailure, setTriggerFailure] = useState(false);
-  const [errorOutput, setErrorOutput] = useState('');
-  const [isCompleted, setIsCompleted] = useState(false);
+  const [errorOutput, setErrorOutput]       = useState('');
+  const [isCompleted, setIsCompleted]       = useState(false);
+  const [attemptCount, setAttemptCount]     = useState(0);
 
+  /* DragonHint modal state */
+  const [hintOpen, setHintOpen] = useState(false);
+
+  /* ── Submit handler ── */
   const handleSubmit = useCallback(async () => {
     if (!activeCheckpoint || isSubmitting) return;
     setIsSubmitting(true);
@@ -37,23 +43,18 @@ const GameScreen: React.FC = () => {
         setTriggerSuccess(true);
         setTimeout(() => setTriggerSuccess(false), 100);
         setIsCompleted(true);
-
-        if (data.achievement) {
-          showAchievement(data.achievement);
-        }
+        if (data.achievement) showAchievement(data.achievement);
       } else {
+        setAttemptCount(c => c + 1);
         setResultStatus(data.sfx_trigger === 'error' ? 'error' : 'failure');
         setTriggerFailure(true);
         setTimeout(() => setTriggerFailure(false), 100);
-
-        if (data.hint) {
-          setHint(data.hint);
-        }
+        // Capture the raw error output so the hint AI can reference it specifically
         if (data.error_type === 'syntax' || data.error_type === 'runtime' || data.error_type === 'timeout') {
-          setErrorOutput(data.narrative_response);
+          setErrorOutput(data.error_output ?? data.narrative_response);
         }
       }
-    } catch (err: any) {
+    } catch {
       setNarrative('A rift in the Grid disrupted your submission. Please try again.');
       setResultStatus('error');
     } finally {
@@ -61,28 +62,41 @@ const GameScreen: React.FC = () => {
     }
   }, [activeCheckpoint, code, isSubmitting]);
 
-  const handleRequestHint = useCallback(async () => {
-    if (!activeCheckpoint || isFetchingHint) return;
+  /* ── Hint request (called by DragonHint component) ── */
+  const handleRequestHint = useCallback(async (): Promise<HintData | null> => {
+    if (!activeCheckpoint) return null;
     setIsFetchingHint(true);
     try {
-      const { data } = await apiRequestHint(activeCheckpoint.id, code, errorOutput);
-      setHint(data.hint);
+      const { data } = await apiRequestHint(
+        activeCheckpoint.id,
+        code,
+        errorOutput,
+        attemptCount,
+        // Full challenge context → AI gives specific, not generic hints
+        activeCheckpoint.challenge_description
+      );
+      return data as HintData;
     } catch {
-      setHint('The Dragon Mother is momentarily occupied. Try submitting your code first.');
+      return {
+        hint: 'The Dragon Mother is momentarily occupied. Try submitting your code first.',
+        escalation_level: 1,
+        dragon_message: '🐉 The Dragon Mother stirs from slumber…',
+      };
     } finally {
       setIsFetchingHint(false);
     }
-  }, [activeCheckpoint, code, errorOutput, isFetchingHint]);
+  }, [activeCheckpoint, code, errorOutput, attemptCount]);
 
+  /* ── Tab key in editor ── */
   const handleTabKey = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Tab') {
       e.preventDefault();
-      const textarea = e.currentTarget;
-      const start = textarea.selectionStart;
-      const end = textarea.selectionEnd;
-      const newCode = code.substring(0, start) + '    ' + code.substring(end);
-      setCode(newCode);
-      setTimeout(() => textarea.setSelectionRange(start + 4, start + 4), 0);
+      const ta = e.currentTarget;
+      const start = ta.selectionStart;
+      const end   = ta.selectionEnd;
+      const next  = code.substring(0, start) + '    ' + code.substring(end);
+      setCode(next);
+      setTimeout(() => ta.setSelectionRange(start + 4, start + 4), 0);
     }
   };
 
@@ -97,7 +111,8 @@ const GameScreen: React.FC = () => {
 
   return (
     <div className="game-screen">
-      {/* Top HUD */}
+
+      {/* ── TOP HUD ── */}
       <div className="game-hud pixel-panel">
         <button className="pixel-btn pixel-btn--ghost game-back-btn" onClick={() => setScreen('map')}>
           ← MAP
@@ -116,14 +131,14 @@ const GameScreen: React.FC = () => {
       </div>
 
       <div className="game-main">
-        {/* Left panel */}
+
+        {/* ── LEFT PANEL ── */}
         <div className="game-left-panel">
-          {/* Phaser game view */}
           <PhaserGame triggerSuccess={triggerSuccess} triggerFailure={triggerFailure} />
 
-          {/* Narrative dialogue box */}
+          {/* Narrative dialogue */}
           <div className={`dialogue-box game-dialogue ${
-            resultStatus === 'success' ? 'dialogue--success' :
+            resultStatus === 'success'                          ? 'dialogue--success' :
             resultStatus === 'failure' || resultStatus === 'error' ? 'dialogue--failure' : ''
           }`}>
             {resultStatus === 'success' && (
@@ -141,24 +156,35 @@ const GameScreen: React.FC = () => {
             </p>
           </div>
 
-          {/* Hint panel */}
-          {isHintVisible && hintText && (
-            <div className="hint-popup">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                <span className="pixel-text" style={{ fontSize: 10, color: 'var(--arcane-blue)' }}>
-                  🐉 DRAGON MOTHER SPEAKS:
-                </span>
-                <button className="pixel-btn pixel-btn--ghost" style={{ fontSize: 8, padding: '4px 8px' }} onClick={toggleHint}>
-                  ✕
-                </button>
-              </div>
-              <p className="pixel-text" style={{ fontSize: 14, lineHeight: 1.7 }}>{hintText}</p>
-            </div>
+          {/* ── Dragon Mother hint trigger button (inline, left panel) ── */}
+          {attemptCount > 0 && !isCompleted && (
+            <button
+              className="game-hint-trigger pixel-btn pixel-btn--ghost"
+              onClick={() => setHintOpen(true)}
+              title="Ask the Dragon Mother for guidance"
+            >
+              <span className="game-hint-trigger-icon">🐉</span>
+              <span className="game-hint-trigger-text">
+                {isFetchingHint ? 'CONSULTING ORACLE…' : 'ASK DRAGON MOTHER'}
+              </span>
+              {/* Escalation indicator dots */}
+              <span className="game-hint-trigger-pips">
+                {[1,2,3].map(n => (
+                  <span
+                    key={n}
+                    className={`game-hint-pip ${
+                      attemptCount >= (n === 1 ? 1 : n === 2 ? 3 : 5) ? 'game-hint-pip--on' : ''
+                    }`}
+                  />
+                ))}
+              </span>
+            </button>
           )}
         </div>
 
-        {/* Right panel - code editor */}
+        {/* ── RIGHT PANEL — CODE EDITOR ── */}
         <div className="game-right-panel">
+
           {/* Challenge description */}
           <div className="game-challenge pixel-panel">
             <p className="pixel-text pixel-text--gold" style={{ fontSize: 9, marginBottom: 8, letterSpacing: 2 }}>
@@ -169,7 +195,7 @@ const GameScreen: React.FC = () => {
             </p>
           </div>
 
-          {/* Code editor label */}
+          {/* Editor header */}
           <div className="game-editor-header">
             <span className="pixel-text pixel-text--dim" style={{ fontSize: 9 }}>
               PYTHON 3 — SPELL CONSTRUCTOR
@@ -191,9 +217,10 @@ const GameScreen: React.FC = () => {
 
           {/* Action buttons */}
           <div className="game-actions">
+            {/* Hint button — visible from first attempt */}
             <button
               className="pixel-btn pixel-btn--ghost"
-              onClick={handleRequestHint}
+              onClick={() => setHintOpen(true)}
               disabled={isFetchingHint}
             >
               {isFetchingHint ? '⟳ CONSULTING ORACLE...' : '🐉 ASK DRAGON MOTHER'}
@@ -219,19 +246,32 @@ const GameScreen: React.FC = () => {
             )}
           </div>
 
-          {/* Status indicator */}
+          {/* Status bar */}
           {resultStatus !== 'none' && (
-            <div className={`game-status-bar pixel-text ${
-              resultStatus === 'success' ? 'pixel-text--green' :
-              'pixel-text--red'
-            }`} style={{ fontSize: 11, textAlign: 'center', padding: 8 }}>
+            <div
+              className={`game-status-bar pixel-text ${
+                resultStatus === 'success' ? 'pixel-text--green' : 'pixel-text--red'
+              }`}
+              style={{ fontSize: 11, textAlign: 'center', padding: 8 }}
+            >
               {resultStatus === 'success' && '★ THE CORRUPTION HAS BEEN PUSHED BACK! ★'}
-              {resultStatus === 'failure' && '✗ Your rune sequence was incorrect. Study the Dragon Mother\'s words.'}
-              {resultStatus === 'error' && '✗ A fracture in your construct was detected. Debug before resubmitting.'}
+              {resultStatus === 'failure' && "✗ Your rune sequence was incorrect. The Dragon Mother can guide you."}
+              {resultStatus === 'error'   && '✗ A fracture in your construct was detected. Debug before resubmitting.'}
             </div>
           )}
         </div>
       </div>
+
+      {/* ══════════════════════════════
+          DRAGON HINT MODAL
+      ══════════════════════════════ */}
+      <DragonHint
+        visible={hintOpen}
+        onClose={() => setHintOpen(false)}
+        onRequestHint={handleRequestHint}
+        isFetching={isFetchingHint}
+        attemptCount={attemptCount}
+      />
     </div>
   );
 };

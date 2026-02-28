@@ -1,4 +1,4 @@
-import './config/env'; // Validate env first
+import './config/env';
 import express from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
@@ -9,10 +9,8 @@ import { errorHandler, notFound } from './middleware/errorHandler';
 
 const app = express();
 
-// Security middleware
 app.use(helmet());
 
-// CORS
 app.use(
   cors({
     origin: env.FRONTEND_URL,
@@ -22,7 +20,6 @@ app.use(
   })
 );
 
-// Rate limiting
 const limiter = rateLimit({
   windowMs: parseInt(env.RATE_LIMIT_WINDOW_MS),
   max: parseInt(env.RATE_LIMIT_MAX_REQUESTS),
@@ -35,9 +32,8 @@ const limiter = rateLimit({
 });
 app.use('/api/', limiter);
 
-// Stricter limit for code submission
 const submissionLimiter = rateLimit({
-  windowMs: 60000, // 1 minute
+  windowMs: 60000,
   max: 10,
   message: {
     error: 'Submission Limit Reached',
@@ -46,25 +42,19 @@ const submissionLimiter = rateLimit({
 });
 app.use('/api/submissions', submissionLimiter);
 
-// Body parsing
 app.use(express.json({ limit: '50kb' }));
 app.use(express.urlencoded({ extended: true }));
-
-// Routes
 app.use('/api', router);
-
-// 404 handler
 app.use(notFound);
-
-// Central error handler
 app.use(errorHandler);
 
 const PORT = parseInt(env.PORT);
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
   console.log(`\n🐉 CodeNova Backend — Emberwood Grid Online`);
   console.log(`   Port: ${PORT}`);
   console.log(`   Environment: ${env.NODE_ENV}`);
   console.log(`   Frontend: ${env.FRONTEND_URL}\n`);
+
 });
 
 export default app;

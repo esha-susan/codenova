@@ -112,3 +112,22 @@ export interface PistonResponse {
   run: PistonRunResult;
   compile?: PistonRunResult;
 }
+// ── Hint types ──────────────────────────────────────────────
+
+export interface HintRequest {
+  checkpoint_id: string;
+  code: string;
+  error_output?: string;
+  attempt_count: number;
+
+  // NEW: rich context fields — the more context, the more specific the hint
+  challenge_description?: string;  // The full text of what the challenge asks
+  expected_output?: string;        // What the correct output should look like
+  test_cases?: string;             // The test cases the code must pass
+}
+
+export interface HintResponse {
+  hint: string;
+  escalation_level: 1 | 2 | 3;
+  dragon_message: string;
+}

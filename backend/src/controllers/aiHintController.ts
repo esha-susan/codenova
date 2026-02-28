@@ -11,7 +11,12 @@ export const requestHint = async (
 ): Promise<void> => {
   try {
     const userId = req.user!.id;
-    const { checkpoint_id, code, error_output } = req.body as HintRequest;
+    const {
+      checkpoint_id,
+      code,
+      error_output,
+      challenge_description,  // ← now received from frontend
+    } = req.body as HintRequest;
 
     if (!checkpoint_id || !code) {
       res.status(400).json({ error: 'checkpoint_id and code are required.' });
@@ -33,6 +38,7 @@ export const requestHint = async (
       code,
       error_output,
       attempt_count,
+      challenge_description,  // ← passed to AI for specific hints
     });
 
     res.json(hintResponse);

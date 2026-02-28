@@ -13,7 +13,6 @@ const api = axios.create({
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('codenova_token');
   if (token && config.headers) {
-    /* FIXED: Wrapped in backticks (`) for the Authorization header */
     config.headers.Authorization = `Bearer ${token}`;
   }
   return config;
@@ -40,9 +39,21 @@ export const apiCreateProfile = (username: string, avatar_id: string) =>
 export const apiGetProgress = () => api.get('/profile/progress');
 export const apiGetAchievements = () => api.get('/profile/achievements');
 export const apiGetCheckpoints = () => api.get('/checkpoints');
-/* FIXED: Wrapped in backticks (`) for the dynamic checkpoint ID */
 export const apiGetCheckpoint = (id: string) => api.get(`/checkpoints/${id}`);
 export const apiSubmitCode = (checkpoint_id: string, code: string) =>
   api.post('/submissions', { checkpoint_id, code });
-export const apiRequestHint = (checkpoint_id: string, code: string, error_output?: string) =>
-  api.post('/hints', { checkpoint_id, code, error_output });
+
+export const apiRequestHint = (
+  checkpointId: string,
+  code: string,
+  errorOutput: string,
+  attemptCount: number,
+  challengeDescription?: string,
+) =>
+  api.post('/hints', {                        // ← api, not axios.post
+    checkpoint_id:         checkpointId,
+    code,
+    error_output:          errorOutput || undefined,
+    attempt_count:         attemptCount,
+    challenge_description: challengeDescription || undefined,
+  });

@@ -15,23 +15,44 @@ export const getDuels = async (
     // Expire stale duels first
     await supabaseAdmin.rpc('expire_old_duels');
 
-    const { data, error } = await supabaseAdmin
+    const { data: duels, error } = await supabaseAdmin
       .from('duels')
       .select(`
         id, stake_xp, status, created_at, expires_at,
         challenger_id, opponent_id, winner_id,
         challenger_solved_at, opponent_solved_at,
         challenger_attempts, opponent_attempts,
-        checkpoints ( id, order_index, title, challenge_description, starter_code, expected_output ),
-        challenger:profiles!duels_challenger_id_fkey ( username, avatar_id, xp, level ),
-        opponent:profiles!duels_opponent_id_fkey ( username, avatar_id, xp, level )
+        checkpoints ( id, order_index, title, challenge_description, starter_code, expected_output )
       `)
       .in('status', ['open', 'active', 'completed'])
       .order('created_at', { ascending: false })
       .limit(50);
 
     if (error) throw error;
-    res.json({ duels: data });
+
+    // Collect all unique user IDs to fetch profiles in one query
+    const userIds = [...new Set([
+      ...duels.map((d: any) => d.challenger_id),
+      ...duels.map((d: any) => d.opponent_id).filter(Boolean),
+    ])];
+
+    const { data: profiles } = await supabaseAdmin
+      .from('profiles')
+      .select('user_id, username, avatar_id, xp, level')
+      .in('user_id', userIds);
+
+    const profileMap = Object.fromEntries(
+      (profiles ?? []).map((p: any) => [p.user_id, p])
+    );
+
+    // Attach profile data to each duel
+    const enriched = duels.map((d: any) => ({
+      ...d,
+      challenger: profileMap[d.challenger_id] ?? null,
+      opponent: d.opponent_id ? (profileMap[d.opponent_id] ?? null) : null,
+    }));
+
+    res.json({ duels: enriched });
   } catch (err) {
     next(err);
   }
